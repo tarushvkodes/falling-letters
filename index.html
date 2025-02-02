@@ -2,10 +2,9 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Falling Letters Animation</title>
+  <title>Falling Letters (High Drop Rate)</title>
   <style>
-    /* Dark background, no margins, and a full‑screen canvas */
-    body { margin: 0; overflow: hidden; background: #111; }
+    body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; }
   </style>
 </head>
@@ -14,121 +13,117 @@
   
   <!-- Matter.js physics engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-  <!-- decomp.js for concave body support (used by Matter.js) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/poly-decomp/0.3.0/decomp.min.js"></script>
-  <!-- opentype.js for converting fonts to SVG paths -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
   
   <script>
-    // Alias some Matter.js modules
-    const Engine = Matter.Engine,
-          World = Matter.World,
-          Bodies = Matter.Bodies,
-          Common = Matter.Common,
-          Vertices = Matter.Vertices;
-
-    // Create the physics engine and world.
-    const engine = Engine.create();
-    const world = engine.world;
-    // Set gravity to mimic Earth (scaling may be needed for pixel units)
-    world.gravity.y = 9.8 / 100; // adjust factor so motion appears natural
-
-    // Get the canvas and context.
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-
-    // Handle canvas resizing and update boundaries accordingly.
-    let ground, leftWall, rightWall;
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      // Remove previous boundaries if they exist.
-      if (ground) World.remove(world, [ground, leftWall, rightWall]);
-      // Create new boundaries (the ground is positioned just below the screen, walls slightly off‑screen)
-      ground = Bodies.rectangle(canvas.width / 2, canvas.height + 50, canvas.width, 100, { isStatic: true });
-      leftWall = Bodies.rectangle(-50, canvas.height / 2, 100, canvas.height, { isStatic: true });
-      rightWall = Bodies.rectangle(canvas.width + 50, canvas.height / 2, 100, canvas.height, { isStatic: true });
-      World.add(world, [ground, leftWall, rightWall]);
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    // URL to a TrueType font file.
-    const fontUrl = 'https://raw.githubusercontent.com/opentypejs/opentype.js/master/example/Roboto-Black.ttf';
-    opentype.load(fontUrl, function(err, font) {
-      if (err) {
-        console.error('Font could not be loaded: ' + err);
-        return;
-      }
-      // Create a new letter every second.
-      setInterval(() => {
-        // Choose a random uppercase letter (A–Z).
-        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-        // Choose a random size (in pixels) for visual variety.
-        const size = Common.random(30, 80);
-        // Generate the SVG path for the letter using the loaded font.
-        const path = font.getPath(letter, 0, 0, size);
-        const pathData = path.toPathData();
-        
-        // Create an SVG <path> element so Matter.Svg can process it.
-        const svgPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        svgPath.setAttribute("d", pathData);
-        // Convert the SVG path to an array of vertices.
-        let vertices = Matter.Svg.pathToVertices(svgPath, 5);
-        let letterBody;
-        if (vertices.length > 0) {
-          // Center the vertices so the body's origin is approximately at its center.
-          const offset = Vertices.centre(vertices);
-          vertices = vertices.map(v => ({ x: v.x - offset.x, y: v.y - offset.y }));
-          // Create a body from these vertices.
-          letterBody = Bodies.fromVertices(
-            Common.random(50, canvas.width - 50),  // random horizontal start
-            -50,                                   // start just above the canvas
-            vertices, {
-              density: 0.001,      // density similar to water
-              friction: 0.1,
-              restitution: 0.3     // bounciness
-            },
-            true // automatically attempt to decompose if concave
-          );
-        } else {
-          // Fallback: if vertices conversion fails, use a simple circle.
-          letterBody = Bodies.circle(
-            Common.random(50, canvas.width - 50),
-            -50,
-            size / 2, {
-              density: 0.001,
-              friction: 0.1,
-              restitution: 0.3
-            }
-          );
-        }
-        World.add(world, letterBody);
-      }, 1000);
-    });
-
-    // The main rendering loop – it updates the physics engine and draws all bodies.
-    (function render() {
-      Engine.update(engine, 1000 / 60);
-      // Clear the canvas.
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      // Set fill style for letters (white) to contrast with the dark background.
-      context.fillStyle = "#fff";
+    document.addEventListener("DOMContentLoaded", function() {
+      // Alias Matter.js modules.
+      const Engine = Matter.Engine,
+            World  = Matter.World,
+            Bodies = Matter.Bodies,
+            Common = Matter.Common,
+            Body   = Matter.Body;
       
-      // Draw each body in the world.
-      world.bodies.forEach(body => {
-        // Skip rendering invisible bodies if needed.
-        const vertices = body.vertices;
-        context.beginPath();
-        context.moveTo(vertices[0].x, vertices[0].y);
-        for (let j = 1; j < vertices.length; j++) {
-          context.lineTo(vertices[j].x, vertices[j].y);
-        }
-        context.closePath();
-        context.fill();
-      });
-      requestAnimationFrame(render);
-    })();
+      // Create engine and world.
+      const engine = Engine.create();
+      const world = engine.world;
+      // Increase gravity for visible falling.
+      world.gravity.y = 1;
+      
+      // Get the canvas and its context.
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      // Resize the canvas and update static boundaries.
+      let ground, leftWall, rightWall;
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        // Clear existing non-static bodies.
+        World.clear(world, false);
+        // Create boundaries.
+        ground = Bodies.rectangle(canvas.width / 2, canvas.height + 50, canvas.width, 100, { isStatic: true });
+        leftWall = Bodies.rectangle(-50, canvas.height / 2, 100, canvas.height, { isStatic: true });
+        rightWall = Bodies.rectangle(canvas.width + 50, canvas.height / 2, 100, canvas.height, { isStatic: true });
+        World.add(world, [ground, leftWall, rightWall]);
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      
+      // Helper to return a random uppercase letter.
+      function randomLetter() {
+        return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      }
+      
+      // Helper to pick a random bright color.
+      function randomColor() {
+        const colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#ffffff"];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+      
+      // Increase drop rate: create a new letter every 100 ms.
+      setInterval(() => {
+        const letter = randomLetter();
+        const size = Common.random(30, 80);
+        // Use size as approximate width/height.
+        const width = size;
+        const height = size;
+        // Random horizontal start (ensuring it fits on screen).
+        const x = Common.random(width / 2, canvas.width - width / 2);
+        const y = -height; // start above the canvas.
+        
+        // Create a rectangle body.
+        const letterBody = Bodies.rectangle(x, y, width, height, {
+          restitution: 0.3,
+          friction: 0.1,
+          density: 0.001
+        });
+        // Apply a slight random initial angle (between -0.3 and 0.3 radians).
+        Body.setAngle(letterBody, Common.random(-0.3, 0.3));
+        
+        // Store custom data for rendering.
+        letterBody.customData = {
+          letter: letter,
+          size: size,
+          color: randomColor()
+        };
+        World.add(world, letterBody);
+        console.log("Added letter:", letter, "size:", size, "at x:", x, "y:", y);
+      }, 100);
+      
+      // Main render loop.
+      function render() {
+        Engine.update(engine, 1000 / 60);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Render each physics body.
+        world.bodies.forEach(body => {
+          if (body.customData && body.customData.letter) {
+            ctx.save();
+            // Translate to body's position and rotate to its angle.
+            ctx.translate(body.position.x, body.position.y);
+            ctx.rotate(body.angle);
+            ctx.font = body.customData.size + "px sans-serif";
+            ctx.fillStyle = body.customData.color;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(body.customData.letter, 0, 0);
+            ctx.restore();
+          } else {
+            // Render boundaries as white polygons.
+            ctx.beginPath();
+            ctx.moveTo(body.vertices[0].x, body.vertices[0].y);
+            for (let j = 1; j < body.vertices.length; j++) {
+              ctx.lineTo(body.vertices[j].x, body.vertices[j].y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+          }
+        });
+        requestAnimationFrame(render);
+      }
+      render();
+    });
   </script>
 </body>
 </html>
